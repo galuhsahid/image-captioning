@@ -85,7 +85,6 @@ class ImageTextDataset(VisionDataset):
 
 @flax.struct.dataclass
 class FlaxDataCollatorForImageLanguageModeling:
-    model: FlaxViTGPT2ForConditionalGeneration
     feature_extractor: ViTFeatureExtractor
     tokenizer: PreTrainedTokenizerBase
     vision_sequence_length: int = 50
@@ -96,41 +95,19 @@ class FlaxDataCollatorForImageLanguageModeling:
         images = [example[0] for example in examples]
         captions = [example[1] for example in examples]
 
-        # In Flax, for seq2seq models we need to pass `decoder_input_ids`
-        # as the Flax models don't accept `labels`, we need to prepare the decoder_input_ids here
-        # for that dynamically import the `shift_tokens_right` function from the model file
-        model_module = __import__(self.model.__module__, fromlist=["shift_tokens_tight"])
-        shift_tokens_right_fn = getattr(model_module, "shift_tokens_right")
-
         # Encode
         encoder_inputs = self.feature_extractor(images=images, return_tensors="jax")
         pixel_values = encoder_inputs.pixel_values
 
         # Decode
         # Handle dict or lists with proper padding and conversion to tensor.
-        labels = self.tokenizer(captions, max_length=self.max_length, padding="max_length", return_tensors="jax")
-        #with self.tokenizer.as_target_tokenizer():
-            #self.tokenizer.pad_token = self.tokenizer.eos_token
-            #self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-            #labels = self.tokenizer(
-                #captions, max_length=self.max_length, padding="max_length", truncation=True, return_tensors="jax"
-            #)
+        decoder_inputs = self.tokenizer(captions, max_length=self.max_length, padding="max_length", return_tensors="jax")
         
-        model_inputs = dict(labels)
-        model_inputs['pixel_values'] = pixel_values
-        model_inputs['labels'] = labels['input_ids']
+        inputs = dict(decoder_inputs)
+        inputs['pixel_values'] = pixel_values
+        inputs['labels'] = inputs['input_ids']
 
-        # check
-        '''decoder_input_ids = shift_tokens_right_fn(
-            jnp.array(labels["input_ids"]), 50265, 50265
-        )'''
-
-        #model_inputs['input_ids'] = np.asarray(decoder_input_ids)
-
-         # We need decoder_attention_mask so we can ignore pad tokens from loss
-        model_inputs["attention_mask"] = labels["attention_mask"]
-
-        return model_inputs
+        return inputs
 
 
 # Args
@@ -224,7 +201,7 @@ class DataTrainingArguments:
         },
     )
     preprocessing_num_workers: Optional[int] = field(
-        default=4,
+        default=0,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
 
@@ -396,7 +373,7 @@ def main():
         )
     
     # Data Collator
-    data_collator = FlaxDataCollatorForImageLanguageModeling(model=model, tokenizer=tokenizer, feature_extractor=feature_extractor)
+    data_collator = FlaxDataCollatorForImageLanguageModeling(tokenizer=tokenizer, feature_extractor=feature_extractor)
 
     # Store some constant
     num_epochs = int(training_args.num_train_epochs)
@@ -422,7 +399,7 @@ def main():
         batch_size=train_batch_size,
         shuffle=True,
         num_workers=data_args.preprocessing_num_workers,
-        persistent_workers=True,
+        #persistent_workers=True,
         drop_last=True,
         collate_fn=data_collator,
     )
@@ -432,7 +409,7 @@ def main():
         batch_size=eval_batch_size,
         shuffle=False,
         num_workers=data_args.preprocessing_num_workers,
-        persistent_workers=True,
+        #persistent_workers=True,
         drop_last=True,
         collate_fn=data_collator,
     )
@@ -485,6 +462,14 @@ def main():
             logits = state.apply_fn(
                 **batch, params=params, dropout_rng=dropout_rng, train=True
             )[0]
+
+            '''print("looove")
+            print(batch)
+            
+            print("wheel")
+            print(logits)
+            print("---")
+            print(onehot(labels, logits.shape[-1]))'''
 
             label_mask = jnp.where(labels > 0, 1.0, 0.0)
             loss = (
