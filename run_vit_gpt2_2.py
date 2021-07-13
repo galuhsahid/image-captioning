@@ -101,7 +101,7 @@ class FlaxDataCollatorForImageLanguageModeling:
     
 
     def __call__(self, examples) -> Dict[str, np.ndarray]:
-        images = [Image.open(example[0]) for example in examples]
+        images = [example[0] for example in examples]
         captions = [example[1] for example in examples]
 
         # In Flax, for seq2seq models we need to pass `decoder_input_ids`
@@ -111,8 +111,16 @@ class FlaxDataCollatorForImageLanguageModeling:
         shift_tokens_right_fn = getattr(model_module, "shift_tokens_right")
 
         # Encode
-        encoder_inputs = self.feature_extractor(images=images, return_tensors="jax")
-        pixel_values = encoder_inputs.pixel_values
+        #encoder_inputs = self.feature_extractor(images=images, return_tensors="jax")
+        #pixel_values = encoder_inputs.pixel_values
+
+        for y in images:
+            _pixel_values = []
+            with Image.open(y) as image:
+                encoder_inputs = self.feature_extractor(images=image, return_tensors="jax")
+                x = encoder_inputs.pixel_values
+                _pixel_values.append(x)
+            pixel_values = np.concatenate(_pixel_values)
 
         # Decode
         # Handle dict or lists with proper padding and conversion to tensor.
@@ -243,7 +251,7 @@ class DataTrainingArguments:
         },
     )
     preprocessing_num_workers: Optional[int] = field(
-        default=4,
+        default=0,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
     predict_with_generate: bool = field(
@@ -501,7 +509,7 @@ def main():
             batch_size=train_batch_size,
             shuffle=True,
             num_workers=data_args.preprocessing_num_workers,
-            persistent_workers=True,
+            #persistent_workers=True,
             drop_last=True,
             collate_fn=data_collator,
         )
@@ -512,7 +520,7 @@ def main():
             batch_size=eval_batch_size,
             shuffle=False,
             num_workers=data_args.preprocessing_num_workers,
-            persistent_workers=True,
+            #persistent_workers=True,
             drop_last=True,
             collate_fn=data_collator,
         )
@@ -523,7 +531,7 @@ def main():
             batch_size=eval_batch_size,
             shuffle=False,
             num_workers=data_args.preprocessing_num_workers,
-            persistent_workers=True,
+            #persistent_workers=True,
             drop_last=True,
             collate_fn=data_collator,
         )
