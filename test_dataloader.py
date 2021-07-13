@@ -72,9 +72,9 @@ class ImageTextDataset(VisionDataset):
 
     def _load_image(self, idx: int):
         path = self.image_paths[idx]
-        #return path
+        return path
         #return read_image(path, mode=ImageReadMode.RGB)
-        return Image.open(path)
+        #return Image.open(path)
 
     def _load_target(self, idx):
         return self.captions[idx]
@@ -103,7 +103,6 @@ class FlaxDataCollatorForImageLanguageModeling:
 
     def __call__(self, examples) -> Dict[str, np.ndarray]:
         images = [example[0] for example in examples]
-        #images = torch.stack([example[0] for example in examples]).permute(0, 2, 3, 1).numpy()
         captions = [example[1] for example in examples]
 
         # In Flax, for seq2seq models we need to pass `decoder_input_ids`
@@ -113,8 +112,16 @@ class FlaxDataCollatorForImageLanguageModeling:
         shift_tokens_right_fn = getattr(model_module, "shift_tokens_right")
 
         # Encode
-        encoder_inputs = self.feature_extractor(images=images, return_tensors="jax")
-        pixel_values = encoder_inputs.pixel_values
+        #encoder_inputs = self.feature_extractor(images=images, return_tensors="jax")
+        #pixel_values = encoder_inputs.pixel_values
+
+        for y in images:
+            _pixel_values = []
+            with Image.open(y) as image:
+                encoder_inputs = self.feature_extractor(images=image, return_tensors="jax")
+                x = encoder_inputs.pixel_values
+                _pixel_values.append(x)
+            pixel_values = np.concatenate(_pixel_values)
 
         # Decode
         # Handle dict or lists with proper padding and conversion to tensor.
