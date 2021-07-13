@@ -72,8 +72,9 @@ class ImageTextDataset(VisionDataset):
 
     def _load_image(self, idx: int):
         path = self.image_paths[idx]
-        return path
+        #return path
         #return read_image(path, mode=ImageReadMode.RGB)
+        return Image.open(path)
 
     def _load_target(self, idx):
         return self.captions[idx]
@@ -82,8 +83,8 @@ class ImageTextDataset(VisionDataset):
         image = self._load_image(index)
         target = self._load_target(index)
 
-        #if self.transforms is not None:
-            #image, target = self.transforms(image, target)
+        ''' if self.transforms is not None:
+            image, target = self.transforms(image, target)'''
 
         return image, target
 
@@ -101,7 +102,8 @@ class FlaxDataCollatorForImageLanguageModeling:
     
 
     def __call__(self, examples) -> Dict[str, np.ndarray]:
-        images = [Image.open(example[0]) for example in examples]
+        images = [example[0] for example in examples]
+        #images = torch.stack([example[0] for example in examples]).permute(0, 2, 3, 1).numpy()
         captions = [example[1] for example in examples]
 
         # In Flax, for seq2seq models we need to pass `decoder_input_ids`
@@ -243,7 +245,7 @@ class DataTrainingArguments:
         },
     )
     preprocessing_num_workers: Optional[int] = field(
-        default=0,
+        default=4,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
     predict_with_generate: bool = field(
